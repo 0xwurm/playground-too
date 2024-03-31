@@ -15,19 +15,13 @@ __m128i test(const __m128i board){
 }
 
 int main() {
-    /*
     auto start = std::chrono::steady_clock::now();
-    std::cout << int(TTT::Bot::search(0, 0)) << std::endl;
+    __m128i board = {0, 0};
+    std::cout << int(TTT::Bot::search(board)) << std::endl;
     auto end = std::chrono::steady_clock::now();
     std::cout << "Nodes: " << CF::nodes << std::endl;
 
     auto time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     std::cout << "t: " << time << " microseconds" << std::endl;
-     */
-
-    __m128i a = {12, 12};
-    __m128i r = test (a);
-    std::cout << r[0] << std::endl;
-    std::cout << r[1] << std::endl;
     return 0;
 }
