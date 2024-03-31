@@ -5,4 +5,6 @@ set(CMAKE_CXX_STANDARD 23)
 add_compile_options(-mbmi2 -mbmi)
 
 add_executable(playground src/main.cpp
-        src/TicTacToe/bot.h)
+        src/TicTacToe/bot.h
+        src/ConnectFour/bot.h
+        src/types.h)

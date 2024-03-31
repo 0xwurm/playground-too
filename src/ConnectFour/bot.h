@@ -2,26 +2,30 @@
 #include <immintrin.h>
 #include "../types.h"
 
-namespace TTT{
+namespace CF{
 
     // 0: Padding
     // x: Board
 
-    // xxx00
-    // xxx00
-    // xxx00
+    // xxxxxxx000
+    // xxxxxxx000
+    // xxxxxxx000
+    // xxxxxxx000
+    // xxxxxxx000
+    // xxxxxxx000
 
+    int nodes = 0;
     class Bot{
     public:
         FORCEINLINE static Result result(const Map us, const Map them){
-            Map wH = (us >> 1) & (us >> 2);
-            Map lH = (them >> 1) & (them >> 2);
-            Map wV = (us >> 5) & (us >> 10);
-            Map lV = (them >> 5) & (them >> 10);
-            Map wD1 = (us >> 6) & (us >> 12);
-            Map lD1 = (them >> 6) & (them >> 12);
-            Map wD2 = (us >> 4) & (us >> 8);
-            Map lD2 = (them >> 4) & (them >> 8);
+            Map wH = (us >> 1) & (us >> 2) & (us >> 3);
+            Map lH = (them >> 1) & (them >> 2) & (them >> 3);
+            Map wV = (us >> 10) & (us >> 20) & (us >> 30);
+            Map lV = (them >> 10) & (them >> 20) & (them >> 30);
+            Map wD1 = (us >> 11) & (us >> 22) & (us >> 33);
+            Map lD1 = (them >> 11) & (them >> 22) & (us >> 33);
+            Map wD2 = (us >> 9) & (us >> 18) & (us >> 27);
+            Map lD2 = (them >> 9) & (them >> 18) & (them >> 27);
 
             if (us & (wH | wV | wD1 | wD2))     return win;
             if (them & (lH | lV | lD1 | lD2))   return loss;
@@ -29,10 +33,11 @@ namespace TTT{
         }
 
         static Result search(const Map us, const Map them){
+            nodes++;
             const Result res = result(us, them);
             if (res != undecided) return res;
 
-            Map legal_moves = ~(us | them) & 0b111001110011100;
+            Map legal_moves = (((us | them) << 10) | 0b1111111000) ^ (us | them);
             if (!legal_moves) return draw;
 
             Result val = loss;
