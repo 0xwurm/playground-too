@@ -1,10 +1,16 @@
 #pragma once
-#include "board.h"
-#include <stack>
 #include <immintrin.h>
 
 namespace TTT{
 
+    // 0: Padding
+    // x: Board
+
+    // xxx00
+    // xxx00
+    // xxx000
+    typedef unsigned short Map;
+    using Bit = Map;
     enum Result: signed char{
         loss = -1,
         draw = 0,
