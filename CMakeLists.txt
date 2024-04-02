@@ -7,4 +7,5 @@ add_compile_options(-march=native)
 add_executable(playground src/main.cpp
         src/TicTacToe/bot.h
         src/ConnectFour/bot.h
-        src/types.h)
+        src/types.h
+        src/testing.h)

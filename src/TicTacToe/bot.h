@@ -4,24 +4,30 @@
 
 namespace TTT{
 
-    class Bd{
+    class Board{
     public:
-        __m128i data;
+        __m256i data;
 
-        Bd(__m128i in){
-            data = in;
+        Board(Map p1, Map p2):
+            data(_mm256_set_epi32(p1, p1, p1, p1, p2, p2, p2, p2))
+        {}
+        Board(__m256i in):
+            data(in)
+        {}
+
+        Board operator>>(int shift[4]) const{
+            __m256i op = _mm256_set_epi32(shift[0], shift[0], shift[0], shift[0],
+                                          shift[1], shift[1], shift[1], shift[1]);
+
+            return _mm256_srlv_epi32(data, op);
+        }
+        Board operator&(Board b2) const{
+            return data & b2.data;
+        }
+        Map operator[](int i) const{
+            return data[i];
         }
     };
-
-    Bd operator>>(const Bd& bd, int n){
-        return {_mm_srli_epi64(bd.data, n)};
-    }
-    Bd operator&(const Bd& bd1, const Bd& bd2){
-        return {_mm_and_si128(bd1.data, bd2.data)};
-    }
-    Bd operator|(const Bd& bd1, const Bd& bd2){
-        return {_mm_or_si128(bd1.data, bd2.data)};
-    }
 
     // 0: Padding
     // x: Board
@@ -30,51 +36,66 @@ namespace TTT{
     // xxx00
     // xxx00
 
+    enum Mask : Map{
+        full = 0b111001110011100,
+        v_sym = 0b001000010000100,
+        h_sym = 0b111000000000000,
+        d1_sym1 = 0b000001000011000, d1_sym2 = 0b011000010000000,
+        d2_sym1 = 0b110001000000000, d2_sym2 = 0b000000010001100
+    };
+
+    namespace Symmetry{
+        const __m128i vertical1 = {v_sym, v_sym};
+        const __m128i vertical2 = {v_sym >> 2, v_sym >> 2};
+        const __m128i horizontal1 = {h_sym, h_sym};
+        const __m128i horizontal2 = {h_sym >> 10, h_sym >> 10};
+        const __m128i diagonal11 = {d1_sym1, d1_sym1};
+        const __m128i diagonal12 = {d1_sym2, d1_sym2};
+        const __m128i diagonal21 = {d2_sym1, d2_sym1};
+        const __m128i diagonal22 = {d2_sym2, d2_sym2};
+    }
+
+    int nodes;
     class Bot{
     public:
-        FORCEINLINE static Result result(const Map us, const Map them){
-            Map wH = (us >> 1) & (us >> 2);
-            Map lH = (them >> 1) & (them >> 2);
-            Map wV = (us >> 5) & (us >> 10);
-            Map lV = (them >> 5) & (them >> 10);
-            Map wD1 = (us >> 6) & (us >> 12);
-            Map lD1 = (them >> 6) & (them >> 12);
-            Map wD2 = (us >> 4) & (us >> 8);
-            Map lD2 = (them >> 4) & (them >> 8);
+        // the greatest function of all time!
+        __attribute__((noinline)) static Result result(const Map& p1, const Map& p2){
+            Board target = {p1, p2};
+            int shift1[4] = {1, 5, 6, 4};
+            int shift2[4] = {2, 10, 12, 8};
 
-            if (us & (wH | wV | wD1 | wD2))     return win;
-            if (them & (lH | lV | lD1 | lD2))   return loss;
+            Board product = target & (target >> shift1) & (target >> shift2);
+
+            if (product[0] | product[1]) return win;
+            if (product[2] | product[3]) return loss;
             return undecided;
         }
 
-        FORCEINLINE static Result test(const Bd board){
-            Bd ho = (board >> 1) & (board >> 2);
-            Bd ve = (board >> 5) & (board >> 10);
-            Bd d1 = (board >> 6) & (board >> 12);
-            Bd d2 = (board >> 4) & (board >> 8);
-
-            Bd complete = (ho | ve | d1 | d2) & board;
-
-            if (complete.data[0]) return win;
-            if (complete.data[1]) return loss;
-            return undecided;
+        static Map symmetries(const Map& p1, const Map& p2){
+            Map unique = full;
+            __m128i board = {static_cast<long long>(p1), static_cast<long long>(p2)};
+            if (_mm_test_all_zeros((board >> 2) ^ board, (board >> 2) ^ board)) unique &= ~v_sym;
+            if (_mm_test_all_zeros((board >> 10) ^ board, (board >> 10) ^ board)) unique &= ~h_sym;
+            return unique;
         }
 
-        static Result search(const __m128i board){
-            const Result res = test(board);
+        template <bool one>
+        static Result search(const Map p1, const Map p2){
+            // nodes++;
+            const Result res = result(p1, p2);
             if (res != undecided) return res;
 
-            Map legal_moves = ~(board[0] | board[1]) & 0b111001110011100;
+            Map legal_moves = (p1 | p2) ^ full;
             if (!legal_moves) return draw;
+            legal_moves &= symmetries(p1, p2);
 
             Result val = loss;
             for(;legal_moves; legal_moves = _blsr_u64(legal_moves)){
-                Bit move = _blsi_u64(legal_moves);
-                __m128i newBoard = {board[1], static_cast<long long>(board[0] | move)};
-                auto branch_val = Result(-search(newBoard));
+                auto branch_val = Result(-search<false>(p2, p1 | _blsi_u64(legal_moves)));
                 if (branch_val == win) return win;
-                if (branch_val > val)
+                if (branch_val > val) {
                     val = branch_val;
+                }
             }
             return val;
         }
