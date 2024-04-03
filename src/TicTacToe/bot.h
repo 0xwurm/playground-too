@@ -6,23 +6,29 @@ namespace TTT{
 
     class Board{
     public:
-        __m256i data;
+        __m128i data;
 
         Board(Map p1, Map p2):
-            data(_mm256_set_epi32(p1, p1, p1, p1, p2, p2, p2, p2))
+            data(_mm_setr_epi16(p1, p1, p1, p1, p2, p2, p2, p2))
         {}
-        Board(__m256i in):
+        Board(Map A, Map B, Map C, Map D, Map E, Map F, Map G, Map H):
+            data(_mm_setr_epi16(A, B, C, D, E, F, G, H))
+        {}
+        Board(__m128i in):
             data(in)
         {}
 
-        Board operator>>(int shift[4]) const{
-            __m256i op = _mm256_set_epi32(shift[0], shift[0], shift[0], shift[0],
-                                          shift[1], shift[1], shift[1], shift[1]);
+        Board operator>>(int shift[8]) const{
+            __m128i op = _mm_setr_epi16(shift[0], shift[1], shift[2], shift[3],
+                                          shift[4], shift[5], shift[6], shift[7]);
 
-            return _mm256_srlv_epi32(data, op);
+            return _mm_srlv_epi16(data, op);
         }
         Board operator&(Board b2) const{
-            return data & b2.data;
+            return _mm_and_si128(data, b2.data);
+        }
+        Board operator^(Board b2) const{
+            return _mm_xor_si128(data, b2.data);
         }
         Map operator[](int i) const{
             return data[i];
@@ -40,7 +46,7 @@ namespace TTT{
         full = 0b111001110011100,
         v_sym = 0b001000010000100,
         h_sym = 0b111000000000000,
-        d1_sym1 = 0b000001000011000, d1_sym2 = 0b011000010000000,
+        d1_sym1 = 0b011000010000000, d1_sym2 = 0b000001000011000,
         d2_sym1 = 0b110001000000000, d2_sym2 = 0b000000010001100
     };
 
@@ -59,23 +65,30 @@ namespace TTT{
     class Bot{
     public:
         // the greatest function of all time!
-        __attribute__((noinline)) static Result result(const Map& p1, const Map& p2){
+        static Result result(const Map& p1, const Map& p2){
             Board target = {p1, p2};
-            int shift1[4] = {1, 5, 6, 4};
-            int shift2[4] = {2, 10, 12, 8};
+            int shift1[8] = {1, 5, 6, 4, 1, 5, 6, 4};
+            int shift2[8] = {2, 10, 12, 8, 2, 10, 12, 8};
 
             Board product = target & (target >> shift1) & (target >> shift2);
 
-            if (product[0] | product[1]) return win;
-            if (product[2] | product[3]) return loss;
+            if (product[0]) return win;
+            if (product[1]) return loss;
             return undecided;
         }
 
         static Map symmetries(const Map& p1, const Map& p2){
+            Map tg = (p1 << 16) | p2;
+            __m256i vec = _mm256_set_epi32(tg, tg, tg, tg, tg, tg, 0, 0);
+            __m256i svec = _mm256_set_epi32(2, 10, 6, 12, 4, 8, 0, 0);
+            __m256i shifted = _mm256_srlv_epi32(vec, svec);
+            __m256i xord = vec ^ shifted;
+
             Map unique = full;
-            __m128i board = {static_cast<long long>(p1), static_cast<long long>(p2)};
-            if (_mm_test_all_zeros((board >> 2) ^ board, (board >> 2) ^ board)) unique &= ~v_sym;
-            if (_mm_test_all_zeros((board >> 10) ^ board, (board >> 10) ^ board)) unique &= ~h_sym;
+            if (!(xord[3] & 0x1084108400000000ull)) unique &= ~v_sym;
+            if (!(xord[3] & 0x00000000001c001cull)) unique &= ~h_sym;
+            if (!(xord[2] & 0x0088008800040004ull)) unique &= ~d2_sym1;
+            if (!(xord[1] & 0x0208020800100010ull)) unique &= ~d1_sym1;
             return unique;
         }
 
