@@ -8,4 +8,5 @@ add_executable(playground src/main.cpp
         src/TicTacToe/bot.h
         src/ConnectFour/bot.h
         src/types.h
-        src/testing.h)
+        src/testing.h
+        src/TicTacToe/transposition_table.h)

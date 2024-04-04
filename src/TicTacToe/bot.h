@@ -1,6 +1,7 @@
 #pragma once
 #include <immintrin.h>
 #include "../types.h"
+#include "transposition_table.h"
 
 namespace TTT{
 
@@ -46,20 +47,9 @@ namespace TTT{
         full = 0b111001110011100,
         v_sym = 0b001000010000100,
         h_sym = 0b111000000000000,
-        d1_sym1 = 0b011000010000000, d1_sym2 = 0b000001000011000,
-        d2_sym1 = 0b110001000000000, d2_sym2 = 0b000000010001100
+        d1_sym1 = 0b011000010000000,
+        d2_sym1 = 0b110001000000000
     };
-
-    namespace Symmetry{
-        const __m128i vertical1 = {v_sym, v_sym};
-        const __m128i vertical2 = {v_sym >> 2, v_sym >> 2};
-        const __m128i horizontal1 = {h_sym, h_sym};
-        const __m128i horizontal2 = {h_sym >> 10, h_sym >> 10};
-        const __m128i diagonal11 = {d1_sym1, d1_sym1};
-        const __m128i diagonal12 = {d1_sym2, d1_sym2};
-        const __m128i diagonal21 = {d2_sym1, d2_sym1};
-        const __m128i diagonal22 = {d2_sym2, d2_sym2};
-    }
 
     int nodes;
     class Bot{
@@ -79,36 +69,47 @@ namespace TTT{
 
         static Map symmetries(const Map& p1, const Map& p2){
             Map tg = (p1 << 16) | p2;
-            __m256i vec = _mm256_set_epi32(tg, tg, tg, tg, tg, tg, 0, 0);
-            __m256i svec = _mm256_set_epi32(2, 10, 6, 12, 4, 8, 0, 0);
-            __m256i shifted = _mm256_srlv_epi32(vec, svec);
-            __m256i xord = vec ^ shifted;
+            __m128i target = _mm_set1_epi32(tg);
+            __m128i shift = _mm_set_epi32(2, 10, 6, 12);
+            target ^= _mm_srlv_epi32(target, shift);
 
             Map unique = full;
-            if (!(xord[3] & 0x1084108400000000ull)) unique &= ~v_sym;
-            if (!(xord[3] & 0x00000000001c001cull)) unique &= ~h_sym;
-            if (!(xord[2] & 0x0088008800040004ull)) unique &= ~d2_sym1;
-            if (!(xord[1] & 0x0208020800100010ull)) unique &= ~d1_sym1;
+            if (!(target[1] & 0x1084108400000000ull)) unique &= ~v_sym;
+            if (!(target[1] & 0x00000000001c001cull)) unique &= ~h_sym;
+            if (!(target[0] & 0x0088008800040004ull)) unique &= ~d2_sym1;
+            // checking for symmetry on diagonal one is slower
             return unique;
         }
 
-        template <bool one>
+        template <int n>
         static Result search(const Map p1, const Map p2){
-            // nodes++;
-            const Result res = result(p1, p2);
-            if (res != undecided) return res;
+            if constexpr (n > 1) {
+                unsigned int index = _pext_u32((p1 << 16) | p2, 0b111001110011100111001110011100);
+                if (TT::table[index].r != undecided) return TT::table[index].r;
+            }
 
+            if constexpr (n < 5) {
+                const Result res = result(p1, p2);
+                if (res != undecided) return res;
+            }
+
+            // if constexpr (!n) return draw; // slower? why?
             Map legal_moves = (p1 | p2) ^ full;
             if (!legal_moves) return draw;
-            legal_moves &= symmetries(p1, p2);
+            if constexpr (n > 6) legal_moves &= symmetries(p1, p2);
 
             Result val = loss;
-            for(;legal_moves; legal_moves = _blsr_u64(legal_moves)){
-                auto branch_val = Result(-search<false>(p2, p1 | _blsi_u64(legal_moves)));
-                if (branch_val == win) return win;
-                if (branch_val > val) {
-                    val = branch_val;
-                }
+            for(int i = 0; i < n; i++){
+                Bit move = _blsi_u64(legal_moves);
+                auto branch_val = Result(-search<n ? n - 1 : 0>(p2, p1 | move));
+                if (branch_val == win)  return win;
+                if (branch_val == draw) val = draw;
+                if constexpr (n) legal_moves = _blsr_u64(legal_moves);
+            }
+
+            if constexpr (n > 1) {
+                unsigned int index = _pext_u32((p1 << 16) | p2, 0b111001110011100111001110011100);
+                TT::table[index].r = val;
             }
             return val;
         }
